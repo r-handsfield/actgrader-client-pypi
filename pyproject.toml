@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "actgrader_client_2024"
+name = "actgrader_client_0.0.0"
 version = "0.0.1"
 authors = [
   { name="R. Handsfield", email="rhandsfield@duck.com" },
@@ -18,11 +18,13 @@ classifiers = [
 license = {text = "GPLv3"}
 license-files = ["LICEN[CS]E*"]
 
+dependencies = ["requests"] 
+
 [project.urls]
-Homepage = "https://github.com/r-handsfield/heroku-actgrader-clilent"
-Issues = "https://github.com/r-handsfield/heroku-actgrader-clilent"
+Homepage = "https://github.com/r-handsfield/heroku-actgrader-client"
+Issues = "https://github.com/r-handsfield/heroku-actgrader-client"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/actgrader_client_2024"]
+packages = ["graderclient"] # dir containing the files to be packaged
 
 

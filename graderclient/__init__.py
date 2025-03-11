@@ -8,7 +8,7 @@ import requests
 from os.path import join
 from pathlib import Path
 from requests import Response
-from typing import NoReturn, Union
+from typing import NoReturn, Union, Tuple
 
 
 class GraderClient():
