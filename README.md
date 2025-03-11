@@ -1,5 +1,5 @@
 # ACT Grader Client
-Client for interfacing with the ACT Grader API
+Client for interfacing with the ACT Grader API. This repository is a variant of the client structured for PyPI release.
 
 ## Summary
 The **GraderClient** sends HTTP Requests to the Grader Service (**Grader**) to trigger the different stages of a grading process: 
