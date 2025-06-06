@@ -76,6 +76,8 @@ class GraderClient():
         oauth : str
             An OAuth2 token
         """
+        self.validate_url(url)
+        self.validate_oauth(oauth)
 
         self.url = url
         self.oauth = oauth
@@ -91,18 +93,199 @@ class GraderClient():
         }
 
 
-    def join_endpoint(self, url: Union[str, pathlib.Path], endpoint: str) -> pathlib.Path:
+    def validate_url(self, url: str) -> bool:
         """
-        Adds api endpoint to the base URL and returns the concatenation as a 
-        Pathlike (PosixPath) object. This method also handles URLs as strings
-        or Paths. Raises a TypeError if the URL is neither string nor Path.
+        Checks whether a URL string is valid and returns True if it is. If the
+        string is invalid, one of the following errors is raised.
 
         Parameters
         ----------
-        url : str or Path
+        str : url
+           A string representing the internet address of the actgrader api. The
+           url must contain either 'http://' or 'https://' as a prefix.
+
+        Raises
+        ------
+        TypeError       URL is not str type 
+        ValueError      URL is None
+        ValueError      Missing 'http://'
+        ValueError      Missing 'https://'
+
+        Returns
+        -------
+        bool
+            If the string is a string beginning with a full http prefix.
+        """
+        if url is None:
+            raise ValueError("The URL is currently None. Try passing the URL explicitly.")
+        elif not isinstance(url, str):
+            raise TypeError("The URL must be a string.")
+        elif url[0:7] == 'http://' or url[0:8] == 'https://':
+            pass
+        else:
+            raise ValueError(f"The URL {url} does not appear to have a properly formed 'http://' or 'https://' prefix")
+
+        return True
+
+
+    def validate_oauth(self, oauth: str) -> bool:
+        """
+        Checks whether an oauth string is valid and returns True if it is. If 
+        the string is invalid, one of the following errors is raised.
+
+        Parameters
+        ----------
+        str : url
+           A string representing the internet address of the actgrader api. The
+           url must contain either 'http://' or 'https://' as a prefix.
+
+        Raises
+        ------
+        TypeError       OAuth is not str type 
+        ValueError      OAuth is None
+
+        Returns
+        -------
+        bool
+            If the OAuth string is an str type.
+        """
+        if oauth is None:
+            raise ValueError("The OAuth is currently None. Try passing it explicitly.")
+        elif not isinstance(oauth, str):
+            raise TypeError("The OAuth must be a string.")
+
+        return True
+
+
+    def validate_image_path(self, path: Union[str, Path]) -> bool:
+        """
+        Checks whether the image file exists and has a valid extension and 
+        raises FileNotFoundErrors if it isn't.
+
+        Extension must be one of jpg, jpeg, png, tif, tiff.
+
+        Parameters
+        ----------
+        str | pathlib.PurePath
+            The full path to the image file as string or posix path.
+
+        Raises
+        ------
+        TypeError               The path is not a string or posix path
+        FileNotFoundError       The file does not exist
+        FileNotFoundError       The file has the wrong extension
+
+        Returns
+        -------
+        bool
+            True if the file exists and has a valid image extension.
+        """
+        if not(isinstance(path, str) or isinstance(path, pathlib.PurePath)):
+            raise TypeError("The image path must be a string or posix path.")
+
+        name, ext = os.path.splitext(path)
+        
+        if not (ext[1:] in ('jpg', 'jpeg', 'png', 'tif', 'tiff')):
+            raise FileNotFoundError("The image file must have a jpg, png, or tif extension.")
+        elif not os.path.exists(path):
+            raise FileNotFoundError(f"The image file {path} does not appear to exist.")
+
+        return True
+
+
+    def validate_uri(self, uri: str) -> bool:
+        """
+        Checks that the URI is of string type.
+
+        A correct URI is returned by self.upload_image(), so don't mess with 
+        it, and you won't have problems. 
+
+        Parameters
+        ----------
+        uri : str
+            A uniform resource identifier to an image stored on the grader 
+            service server.
+
+        Raises
+        ------
+        TypeError       If the URI is not a string
+
+        Returns
+        -------
+        bool
+            True if the URI is a string. 
+        """
+        if uri is None:
+            raise ValueError("The URI is currently None. Try passing it explicitly.")
+        elif not isinstance(uri, str):
+            raise TypeError("The URI must be a string.")
+
+        # Check that URI has proper schema - NOT IMPLEMENTED for security
+        # reasons.
+
+        return True
+
+
+    def validate_path(self, 
+            path: Union[str, Path],
+            extension: str
+        ) -> bool:
+        """
+        Checks that the directory exists and the destination path terminates 
+        in the proper extension.
+
+        The GraderClient contains methods to download files from the Grader 
+        Service to a user-specified location. This validator ensures that the
+        destination file can receive the data without errors.
+
+        Parameters
+        ----------
+        path : str | pathlib.PurePath
+            path/to/destination/location/file.ext
+
+        extension: str
+            The desired file extension WITHOUT the leading period.
+
+            Ex: json, jpg, etc.  NOT  .json, .jpg, etc.
+
+        Raises
+        ------
+        TypeError           If the path is not a string or Path object
+        FileNotFoundError   If the directory does not exsist
+        ValueError          If the specified file has the wrong extension
+
+        Returns
+        -------
+        bool
+            True if the path exists and terminates in a correct extension.
+        """
+        if not (isinstance(path, str) or isinstance(path, pathlib.PurePath)):
+            raise TypeError(f"The path {path} must be a string or posix path.")
+
+        directory = os.path.dirname(path)
+        _, ext = os.path.splitext(path)
+        ext = ext[1:]
+        
+        if not os.path.exists(directory):
+            raise FileNotFoundError(f"The directory '{directory}' does not appear to exist.")
+
+        if (ext == '') or (not ext == extension):
+            raise ValueError(f"To properly receive data, the destination file must have a {extension} extension.")
+
+        return True
+    
+
+    def join_endpoint(self, url: str, endpoint: str) -> str:
+        """
+        Adds api endpoint to the base URL and returns the concatenation as a 
+        string. Raises a TypeError if the URL is not a string.
+
+        Parameters
+        ----------
+        url : str 
             The base url hosting the ACT Grader
 
-        endpont : str
+        endpoint : str
             A specifed api endpoint
 
         Returns
@@ -111,30 +294,26 @@ class GraderClient():
             The base URL concatenated with the endpoint
             Ex: https://grader.com/api/download/marked_answers
         """
-
-        # @TODO Replace Path calls with urllib or something b/c Path is only
-        # appropriate for INTERNAL pathing, not http addresses. 
         if isinstance(url, str):
             url = join(url, endpoint)  
-        elif isinstance(url, pathlib.PurePath):
-            url = url / endpoint
         else:
-            raise TypeError("The URL must be a string or a valid Path object.")
+            raise TypeError("The URL must be a string.")
 
         if not isinstance(endpoint, str):
             raise TypeError("The endpoint must be a string.")
 
         return url
 
-    
 
-    # @TODO write this unit test
     def upload_image(self,
                         path: Union[str, Path], 
-                        url: Union[str, Path]=None, 
+                        url: str=None, 
                         oauth: str=None 
     ) -> Tuple[Response, Union[str, None]]:
         """
+        Uploads an answer sheet image to the grader. There are no checks to 
+        determine whether an image is a valid answer sheet. Uploading creates
+        a new resource.
         
         Parameters
         ----------
@@ -149,11 +328,14 @@ class GraderClient():
 
         Returns
         -------
-        http response
+        requests.Response
+            An HTTP response; contains the status code and additional data.
 
         str | None
-            The URI
+            The URI -- the address of the resource on the grader server.
+            If the client or server encounters an error, None is returned.
         """
+        self.validate_image_path(path)
         endpoint = self.__endpoints['upload_image']
 
         if url is None:
@@ -161,17 +343,11 @@ class GraderClient():
         if oauth is None:
             oauth = self.oauth
 
-        # @TODO Replace Path calls with urllib or something b/c Path is only
-        # appropriate for INTERNAL pathing, not http addresses.    
-        if isinstance(url, str):
-            # url = Path(url) / endpoint
-            url = join(url, endpoint)
-        elif isinstance(url, pathlib.PurePath):
-            url = url / endpoint
-        else:
-            raise TypeError("The URL must be a string or a valid Path object.")
-        print(url)
-            
+        self.validate_url(url)
+        self.validate_oauth(oauth)
+
+        url = self.join_endpoint(url, endpoint)
+
         with open(path, 'rb') as f:
             img_data = f.read()
             files = {'file': ("aOriginal.jpg", img_data)}
@@ -183,11 +359,10 @@ class GraderClient():
             return response, None
 
 
-    # @TODO write this unit test
     def process_image(self, 
+                        uri: str=None,
                         url: str=None, 
-                        oauth: str=None, 
-                        uri: str=None
+                        oauth: str=None 
     ) -> Tuple[Response, Union[str, None]]:
         """
         Triggers image processing on the server, which 
@@ -199,20 +374,22 @@ class GraderClient():
  
         Parameters
         ----------
+        uri : str
+            The resource's unique identifier on the server
+
         url : str
             The Grader's URL. If None, tries to read from self.url
 
         oauth : str
 
-        uri : str
-            The resource's unique identifier on the server
-
         Returns
         -------
-        http response
+        requests.Response
+            An HTTP response; contains the status code and additional data.
 
         str | None
-            The URI
+            The URI -- the address of the resource on the grader server.
+            If the client or server encounters an error, None is returned.
         """
         endpoint = self.__endpoints['process_image']
 
@@ -222,6 +399,10 @@ class GraderClient():
             oauth = self.oauth
         if uri is None:
             uri = self.uri
+
+        self.validate_url(url)
+        self.validate_oauth(oauth)
+        self.validate_uri(uri)
         
         url = self.join_endpoint(url, endpoint)
         values = {'uri': uri}
@@ -239,9 +420,9 @@ class GraderClient():
     # @TODO write this unit test
     def update_marked_answers(self,
                                 path: Union[str, Path], 
+                                uri: str=None,
                                 url: str=None, 
-                                oauth: str=None, 
-                                uri: str=None
+                                oauth: str=None 
     ) -> Tuple[Response, Union[str, None]]:
         """
         Overwrites the json file of marked answers on the remote server. 
@@ -252,23 +433,25 @@ class GraderClient():
  
         Parameters
         ----------
+        path : str | Path
+            path/to/marked/answers.json
+
+        uri : str
+            The resource's unique identifier on the server
+
         url : str
             The Grader's URL. If None, tries to read from self.url
 
         oauth : str
 
-        uri : str
-            The resource's unique identifier on the server
-
-        path : str | Path
-            path/to/marked/answers.json
-
         Returns
         -------
-        http response
+        requests.Response
+            An HTTP response; contains the status code and additional data.
 
         str | None
-            The URI
+            The URI -- the address of the resource on the grader server.
+            If the client or server encounters an error, None is returned.
         """
         endpoint = self.__endpoints['update_marked_answers']
 
@@ -296,35 +479,36 @@ class GraderClient():
 
 
 
-    # @TODO write this unit test
     def download_marked_answers(self, 
-                                path: Union[str, Path]=None,
+                                path: Union[str, Path],
+                                uri: str=None,
                                 url: str=None, 
-                                oauth: str=None, 
-                                uri: str=None
+                                oauth: str=None,
     ) -> Tuple[Response, Union[str, None]]:
         """
-        Downloads marked answers as a json file
+        Downloads marked answers as a json file.
   
         Parameters
         ----------
         path : str
             path/to/download/directory/answers.json
 
+        uri : str
+            The resource's unique identifier on the server
+
         url : str
             The Grader's URL. If None, tries to read from self.url
 
         oauth : str
 
-        uri : str
-            The resource's unique identifier on the server
-
         Returns
         -------
-        http response
+        requests.Response
+            An HTTP response; contains the status code and additional data.
 
         str | None
-            The destination file path
+            The destination file path.
+            If the client or server encounters an error, None is returned.
         """
         endpoint = self.__endpoints['download_marked_answers']
 
@@ -334,6 +518,11 @@ class GraderClient():
             oauth = self.oauth
         if uri is None:
             uri = self.uri
+
+        self.validate_path(path, 'json')
+        self.validate_uri(uri)
+        self.validate_url(url)
+        self.validate_oauth(oauth)
         
         url = self.join_endpoint(url, endpoint)
         values = {'uri': uri}
@@ -349,6 +538,8 @@ class GraderClient():
             else: 
                 raise Warning("The http request returned a response, but it does not appear to contain a json file. Examine 'response.content' to determine what was actually returned.")
             return response, None
+        elif response.status_code == 500:
+            raise FileNotFoundError(f"The extracted answers could not be found at the URI {uri}. Verify that you are using the exact URI returned by `GraderClient.process_image()`.")
         else:
             return response, None
 
@@ -361,9 +552,9 @@ class GraderClient():
     # @TODO write this unit test
     def download_confirmation_image(self, 
                                     path: Union[str, Path],
+                                    uri: str=None,
                                     url: str=None, 
-                                    oauth: str=None, 
-                                    uri: str=None
+                                    oauth: str=None
     ) -> Tuple[Response, Union[str, None]]:
         """
    
@@ -372,20 +563,22 @@ class GraderClient():
         path : str
             path/to/download/directory/image.jpg
 
+        uri : str
+            The resource's unique identifier on the server
+
         url : str
             The Grader's URL. If None, tries to read from self.url
 
         oauth : str
 
-        uri : str
-            The resource's unique identifier on the server
-
         Returns
         -------
-        http response
+        requests.Response
+            An HTTP response; contains the status code and additional data.
 
         str | None
-            The marked answers as json
+            The marked answers as json. 
+            If the client or server encounters an error, None is returned.
         """
         endpoint = self.__endpoints['download_confirmation_image']
 
@@ -395,6 +588,11 @@ class GraderClient():
             oauth = self.oauth
         if uri is None:
             uri = self.uri
+
+        self.validate_path(path, 'jpg')
+        self.validate_uri(uri)
+        self.validate_oauth(oauth)
+        self.validate_url(url)
         
         url = self.join_endpoint(url, endpoint)
         values = {'uri': uri}
@@ -410,6 +608,8 @@ class GraderClient():
             else: 
                 raise Warning("The http request returned a response, but it does not appear to contain an image file. Examine 'response.content' to determine what was actually returned.")
             return response, None
+        elif response.status_code == 500:
+            raise FileNotFoundError(f"The confirmation image could not be found at the URI {uri}. Verify that you are using the exact URI returned by `GraderClient.process_image()`.")
         else:
             return response, None
 
