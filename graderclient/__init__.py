@@ -348,9 +348,12 @@ class GraderClient():
 
         url = self.join_endpoint(url, endpoint)
 
+        name_img = os.path.basename(path)
+
         with open(path, 'rb') as f:
             img_data = f.read()
-            files = {'file': ("aOriginal.jpg", img_data)}
+            # files = {'file': ("aOriginal.jpg", img_data)}
+            files = {'file': (name_img, img_data)}
             response = requests.post(url, files=files)
 
         if response.status_code == 200:
@@ -612,6 +615,7 @@ class GraderClient():
             raise FileNotFoundError(f"The confirmation image could not be found at the URI {uri}. Verify that you are using the exact URI returned by `GraderClient.process_image()`.")
         else:
             return response, None
+
 
 
 
