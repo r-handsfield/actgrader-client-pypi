@@ -26,7 +26,7 @@ To accomplish the 4 grading actions, the GraderClient requires 3 pieces of infor
 - `download_confirmation_image(filepath, uri)`: Downloads the confirmation image to the specified `filepath`. The `filepath` must end in a jpg extension. Ex. `C:\\Desktop\confirmation_image.jpg` 
 
 ### Creating the GraderClient Object
-The GraderClient requires a url and an oath token during creation. They do not need to be explicitly passed to the object's methods. 
+The GraderClient requires a url and an oauth token during creation. They do not need to be explicitly passed to the object's methods. 
 
 Uploading an image returns a URI; explicitly assigning that URI to the GraderClient object makes the other method calls simpler:
 
