@@ -1,14 +1,18 @@
 # Class Definition for ActGrader Client
 #
+# This module builds to PyPI and should remain concurrent with
+# /source/classes/client.py
 
-import os, sys
+import os, sys, _io
 import pathlib
 import requests
+import warnings
 
 from os.path import join
 from pathlib import Path
 from requests import Response
 from typing import NoReturn, Union, Tuple
+
 
 
 class GraderClient():
@@ -114,16 +118,26 @@ class GraderClient():
         Returns
         -------
         bool
-            If the string is a string beginning with a full http prefix.
+            True if the url is a string beginning with a full http prefix.
         """
         if url is None:
-            raise ValueError("The URL is currently None. Try passing the URL explicitly.")
+            raise ValueError("The URL is currently None. Try passing the URL explicitly.\n")
+
         elif not isinstance(url, str):
-            raise TypeError("The URL must be a string.")
-        elif url[0:7] == 'http://' or url[0:8] == 'https://':
-            pass
-        else:
-            raise ValueError(f"The URL {url} does not appear to have a properly formed 'http://' or 'https://' prefix")
+            raise TypeError("The URL must be a string.\n")
+
+        elif url[0:7] != 'http://' and url[0:8] != 'https://':
+            print('\n', url, url[0:8], url[0:8], '\n', sep='\n')
+            raise ValueError(f"The URL {url} is missing a 'http://' or 'https://' prefix.\n")
+
+        elif False:
+            m = f"The URL {url} appears to be invalid. "
+            m += "It must be of the following forms\n"
+            m += "http://some.ip.address \n"
+            m += "https://some.ip.address \n"
+            m += "http://some.domain.com \n"
+            m += "https://some.domain.com \n\n"
+            raise ValueError(m)
 
         return True
 
@@ -185,7 +199,7 @@ class GraderClient():
 
         name, ext = os.path.splitext(path)
         
-        if not (ext[1:] in ('jpg', 'jpeg', 'png', 'tif', 'tiff')):
+        if not (ext[1:] in ('jpg', 'jpeg', 'png', 'tif', 'tiff', 'heic')):
             raise FileNotFoundError("The image file must have a jpg, png, or tif extension.")
         elif not os.path.exists(path):
             raise FileNotFoundError(f"The image file {path} does not appear to exist.")
@@ -226,10 +240,7 @@ class GraderClient():
         return True
 
 
-    def validate_path(self, 
-            path: Union[str, Path],
-            extension: str
-        ) -> bool:
+    def validate_path(self, path: Union[str, Path], extension: str) -> bool:
         """
         Checks that the directory exists and the destination path terminates 
         in the proper extension.
@@ -273,7 +284,125 @@ class GraderClient():
             raise ValueError(f"To properly receive data, the destination file must have a {extension} extension.")
 
         return True
+
+
+    def validate_file_cursor(self, file_handle: _io.BufferedReader) -> bool:
+        """
+        When the GraderClient is used within certain application frameworks,
+        (looking at you Flask) the framework might move the image's file cursor 
+        to the final bit before passing it into `self.upload_image()`. 
+        This method checks the cursor position, and if the cursor is not at 
+        position 0, sends a Warning and returns False.
+
+        This method operates on open files, so it should be used within an open
+        file context:
+
+        with open("path/to/my_file.ext", 'rb') as f:
+            gc.validate_file_cursor(f)
+
+        OR
+
+        f = open("path/to/my_file.ext", 'rb')
+        gc.validate_file_cursor(f)
+        f.close()
+
+        Parameters
+        ----------
+        file_handle : _io.BufferedReader
+            A pointer to an open file being read as bytes. The file must be 
+            opened with the 'rb' (read-bytes) argument.
+
+        Warnings
+        --------
+        Warn        If the file's cursor is not at postion 0
+
+        Returns
+        -------
+        bool
+            True    If the file's cursor is at position 0
+            False   If the file's cursor is NOT at position 0
+        """
+        
+        if file_handle.tell() == 0:
+            return True
+        else:
+            m = f"\nThe file cursor is at position {file_handle.tell()} when it should be at position 0.\n"
+            m += "This can cause problems during processing. Try running file.seek(0) before\n"
+            m += "passing the file to the GraderClient."
+            warnings.warn(m)
+            return False
+
     
+   # @TODO write this unit test
+    def verify_endpoint(self, endpoint: str=None, url: str=None):
+        """
+        Sends an HTTP GET request to the specified url and endpoint. If the 
+        HTTP response is 200, the API service is running and the endpoint is 
+        listening.
+
+        If an endpoint is not specified, the '/api/upload/image' endpoint is requested.
+   
+        Parameters
+        ----------
+        endpoint : str | None
+            A valid endpoint of the form '/api/operation/resource'. If the 
+            endpoint is None, the endpoint '/api/upload/image' is verified.
+            Refer to the API docs for a list of endpoints.
+
+        url : str | None
+            The Grader's URL. If None, tries to read from self.url
+
+        Returns
+        -------
+        requests.Response | None
+            An HTTP response; contains the status code and additional data. If 
+            the API cannot be reached, and HTTP response cannot be creaated and
+            None is returned.
+
+        str 
+            A human-readable message about the verification results.
+        """
+        if url is None:
+            url = self.url
+
+        self.validate_url(url)
+
+        if endpoint is None:
+            endpoint = self.__endpoints['upload_image']
+
+        # validate endpoint -- @TODO write the validation method
+        if endpoint[0] == '/': endpoint = endpoint[1:] # strip leading / if necessary
+
+        if endpoint not in self.__endpoints.values():
+            m = f"{endpoint} is not a valid ACT Grader endpoint. "
+            m += "Refer to the API docs or pass 'endpoint=None'."
+            raise ValueError(m)
+        else:
+            pass
+
+        
+        try:
+            ### HTTP Request ###
+            response = requests.get(self.join_endpoint(url, endpoint))
+
+            if response.status_code == 200:
+                message = f"The ACT Grader API is running at:  {url}\n"
+                message +=f"   and listening at the endpoint:  {endpoint}\n"
+            else:
+                message = f"The ACT Grader API at {url + '/' + endpoint} does not appear to be running and returned an HTTP status code of {response.status_code}\n."
+        except Exception as e:
+            response = e
+            message = f"Fatal Error: The ACT Grader API could not be reached at {url + '/' + endpoint}.\n\n"
+            message += f"This could mean that \n  (1) The API is not running \n" 
+            message += f"  (2) The URL or endpoint are incorrect.\n"
+            message += f"  (3) A network error is preventing you from connecting to the API.\n"
+            message += f"  (4) There are errors in the URL or endpoint. Check the spellings. \n\n"
+            message += str(e)
+
+            return e, message
+
+        return response, message
+ 
 
     def join_endpoint(self, url: str, endpoint: str) -> str:
         """
@@ -351,9 +480,15 @@ class GraderClient():
         name_img = os.path.basename(path)
 
         with open(path, 'rb') as f:
+            # if the image's cursor is not at zero for some dumb reason,
+            # send a warning and reset the cursor
+            if not self.validate_file_cursor(f):
+                f.seek(0)
+
             img_data = f.read()
-            # files = {'file': ("aOriginal.jpg", img_data)}
             files = {'file': (name_img, img_data)}
+
+            ### HTTP Request ###
             response = requests.post(url, files=files)
 
         if response.status_code == 200:
@@ -410,6 +545,7 @@ class GraderClient():
         url = self.join_endpoint(url, endpoint)
         values = {'uri': uri}
 
+        ### HTTP Request ###
         response = requests.post(url, data=values)
 
         
@@ -417,7 +553,6 @@ class GraderClient():
             return response, response.json()['uri']
         else:
             return response, None
-
 
 
     # @TODO write this unit test
@@ -471,6 +606,8 @@ class GraderClient():
         with open(path, 'rb') as f:
             json_data = f.read()
             files = {'file': ("updated_answers.json", json_data)}
+
+            ### HTTP Request ###
             response = requests.put(url, data=values, files=files)
 
         
@@ -478,8 +615,6 @@ class GraderClient():
             return response, response.json()['uri']
         else:
             return response, None
-
-
 
 
     def download_marked_answers(self, 
@@ -530,6 +665,7 @@ class GraderClient():
         url = self.join_endpoint(url, endpoint)
         values = {'uri': uri}
 
+        ### HTTP Request ###
         response = requests.post(url, data=values)
 
         
@@ -600,8 +736,8 @@ class GraderClient():
         url = self.join_endpoint(url, endpoint)
         values = {'uri': uri}
 
+        ### HTTP Request ###
         response = requests.post(url, data=values)
-
         
         if response.status_code == 200:
             if isinstance(response.content, bytes):
@@ -617,6 +753,4 @@ class GraderClient():
             return response, None
 
 
-
-
-
+    
